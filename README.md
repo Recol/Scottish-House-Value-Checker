@@ -3,7 +3,7 @@
  
  # Build Instructions
  - Clone the repository.
- - Open the folder within an IDE. 
+ - Open the folder within an IDE, or go to the location via Terminal. 
  - Run pip install -r requirements.txt
  - Run uvicorn main:app and then go to http://127.0.0.1:8000/docs within the browser.
  - Enter the Rightmove URL into the "Try it out" segment.
