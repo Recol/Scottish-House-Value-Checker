@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import uvicorn
 from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -69,38 +70,39 @@ def get_simd_data(postcode):
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
 
-    with webdriver.Chrome(executable_path=CHROME_DRIVER_PATH, options=options) as driver:
-        driver.get(url)
+    driver = webdriver.Chrome(ChromeDriverManager().install(), options=options)
 
-        postcode_input = driver.find_element(By.ID, "postcode")
-        postcode_input.send_keys(postcode)
+    driver.get(url)
 
-        submit_button = driver.find_element(By.ID, "postcodeButton")
+    postcode_input = driver.find_element(By.ID, "postcode")
+    postcode_input.send_keys(postcode)
 
-        # Wait for the submit button to be clickable and click it
-        WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "postcodeButton")))
-        
-        # Move to the element before clicking it
-        actions = ActionChains(driver)
-        actions.move_to_element(submit_button).click().perform()
+    submit_button = driver.find_element(By.ID, "postcodeButton")
 
-        # Wait for the data to load
-        WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "componenttable")))
+    # Wait for the submit button to be clickable and click it
+    WebDriverWait(driver, 10).until(EC.element_to_be_clickable((By.ID, "postcodeButton"))) # noqa
+    
+    # Move to the element before clicking it
+    actions = ActionChains(driver)
+    actions.move_to_element(submit_button).click().perform()
 
-        # Extract data from the table
-        table = driver.find_element(By.ID, "componenttable")
-        rows = table.find_elements(By.TAG_NAME, "tr")
+    # Wait for the data to load
+    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "componenttable"))) # noqa
 
-        simd_data = []
-        for row in rows:
-            columns = row.find_elements(By.TAG_NAME, "td")
-            if columns:
-                domain_name = columns[0].get_attribute("textContent").strip()
-                try:
-                    rank = int(re.sub(r"[^\d]", "", columns[1].get_attribute("textContent").strip()))
-                    simd_data.append({"domain": domain_name, "rank": rank})
-                except ValueError:
-                    pass
+    # Extract data from the table
+    table = driver.find_element(By.ID, "componenttable")
+    rows = table.find_elements(By.TAG_NAME, "tr")
+
+    simd_data = []
+    for row in rows:
+        columns = row.find_elements(By.TAG_NAME, "td")
+        if columns:
+            domain_name = columns[0].get_attribute("textContent").strip()
+            try:
+                rank = int(re.sub(r"[^\d]", "", columns[1].get_attribute("textContent").strip()))
+                simd_data.append({"domain": domain_name, "rank": rank})
+            except ValueError:
+                pass
 
     return simd_data
 
@@ -121,7 +123,7 @@ def extract_section_data(soup, section_id):
 
 
 def get_geographical_data(postcode):
-    street_check_url = f"https://www.streetcheck.co.uk/postcode/{postcode.lower().replace(' ', '')}"
+    street_check_url = f"https://www.streetcheck.co.uk/postcode/{postcode.lower().replace(' ', '')}" # noqa
     response = requests.get(street_check_url)
     soup = BeautifulSoup(response.content, "html.parser")
 
