@@ -10,6 +10,8 @@ from selenium.webdriver.support import expected_conditions as EC
 import os
 import re
 from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
+import time
 
 
 app = FastAPI()
@@ -94,36 +96,54 @@ def get_simd_data(postcode):
     rows = table.find_elements(By.TAG_NAME, "tr")
 
     simd_data = []
-    for row in rows:
-        columns = row.find_elements(By.TAG_NAME, "td")
-        if columns:
-            domain_name = columns[0].get_attribute("textContent").strip()
-            try:
-                rank = int(re.sub(r"[^\d]", "", columns[1].get_attribute("textContent").strip()))
-                simd_data.append({"domain": domain_name, "rank": rank})
-            except ValueError:
-                pass
+    row_count = len(driver.find_elements(By.XPATH, '//*[@id="componenttable"]/tbody/tr'))
+    for i in range(2, row_count + 1):
+        domain_name = driver.find_element(By.XPATH, f'//*[@id="componenttable"]/tbody/tr[{i}]/td[1]').text.strip()
+        rank_text = driver.find_element(By.XPATH, f'//*[@id="componenttable"]/tbody/tr[{i}]/td[2]').text.strip()
+        if rank_text:
+            rank = int(re.sub(r"[^\d]", "", rank_text))
+            simd_data.append({"domain": domain_name, "rank": rank})
+            print(f"Extracted: {{'domain': '{domain_name}', 'rank': {rank}}}")
 
+    print(f"simd_data: {simd_data}")
     return simd_data
 
 
 def extract_section_data(soup, section_id):
     section_data = {}
-    section = soup.find("section", {"id": section_id})
-
+    section = soup.find("a", {"href": f"#{section_id}"})
+    
     if section:
-        for row in section.find_all("div", {"class": "row"}):
-            for key, value in zip(row.find_all("div", {"class": "col-md-6"}),
-                                  row.find_all("div", {"class": "col-md-6", "style": "font-weight: bold;"})):
-                key_text = key.get_text(strip=True).replace(":", "")
-                value_text = value.get_text(strip=True)
-                section_data[key_text] = value_text
+        parent = section.find_parent("div", {"class": "tab-content"})
+        section = parent.find("div", {"id": section_id})
+
+        if section_id == "housing":
+            info_pieces = section.find_all("div", {"class": "info-piece"})
+            for info_piece in info_pieces:
+                header = info_piece.find("h3").get_text(strip=True)
+                description = info_piece.find("p").get_text(strip=True)
+                pie_chart_data = {}
+                for pie_segment in info_piece.find_all("div", {"class": "chartable"}):
+                    label = pie_segment["data-label"]
+                    value = float(pie_segment["data-value"])
+                    pie_chart_data[label] = value
+                section_data[header] = {
+                    "description": description,
+                    "pie_chart_data": pie_chart_data
+                }
+        else:
+            for row in section.find_all("div", {"class": "row"}):
+                for key, value in zip(row.find_all("div", {"class": "col-md-6"}),
+                                      row.find_all("div", {"class": "col-md-6", "style": "font-weight: bold;"})):
+                    key_text = key.get_text(strip=True).replace(":", "")
+                    value_text = value.get_text(strip=True)
+                    section_data[key_text] = value_text
 
     return section_data
 
 
 def get_geographical_data(postcode):
-    street_check_url = f"https://www.streetcheck.co.uk/postcode/{postcode.lower().replace(' ', '')}" # noqa
+    street_check_url = f"https://www.streetcheck.co.uk/postcode/{postcode.lower().replace(' ', '')}"
     response = requests.get(street_check_url)
     soup = BeautifulSoup(response.content, "html.parser")
 
@@ -135,7 +155,6 @@ def get_geographical_data(postcode):
         "nearby": extract_section_data(soup, "nearby"),
         "broadband": extract_section_data(soup, "services"),
     }
-
     return geographical_data
 
 
